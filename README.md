@@ -1,6 +1,6 @@
 # ConquestXP
 
-An XP and luminance tracker plugin for the AC:Unreal client made specifically for the Conquest server. XP figures use the same calculation as the client's built-in Hunt Ledger, but includes the extended 275-300 xp table. Luminance comes from server `/lph` commands. The plugin runs whenever it is enabled and there are no start/stop buttons.
+An XP and luminance tracker plugin for the AC:Unreal client made specifically for the Conquest server. XP figures use the same calculation as the client's built-in Hunt Ledger, but includes the extended 275-300 xp table. Luminance comes from server `/lph` commands.
 
 <img width="280" height="187" alt="image" src="https://github.com/user-attachments/assets/e226c757-f58f-4969-a88e-0139353f12fb" />
 
@@ -29,6 +29,8 @@ An XP and luminance tracker plugin for the AC:Unreal client made specifically fo
 Replace the files in `Installed\ConquestXP` with the new download and press **Refresh** in Manage Plugins. Your settings are saved outside this folder, so they are retained.
 
 ## In game
+
+- The plugin runs whenever it is enabled and there are no specific start/stop buttons. To turn it off, disable it in the plugins menu.
 
 ### The window
 
