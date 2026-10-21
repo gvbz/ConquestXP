@@ -1,4 +1,4 @@
-# Conquest XP (ConquestXP)
+# ConquestXP
 
 An XP and luminance tracker plugin for the AC:Unreal client made specifically for the Conquest server. XP figures use the same calculation as the client's built-in Hunt Ledger, but includes the extended 275-300 xp table. Luminance comes from server `/lph` commands. The plugin runs whenever it is enabled and there are no start/stop buttons.
 
