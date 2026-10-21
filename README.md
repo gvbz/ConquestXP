@@ -1,12 +1,14 @@
 # Conquest XP (ConquestXP)
 
-An XP and luminance tracker plugin for the AC:Unreal client, made for the Conquest server. XP figures use the same calculation as the client's built-in Hunt Ledger. Luminance comes from Conquest's `/lph` command, because Conquest banks luminance instead of adding it to your character. The plugin runs whenever it is enabled and there are no start/stop buttons.
+An XP and luminance tracker plugin for the AC:Unreal client made specifically for the Conquest server. XP figures use the same calculation as the client's built-in Hunt Ledger, but includes the extended 275-300 xp table. Luminance comes from server `/lph` commands. The plugin runs whenever it is enabled and there are no start/stop buttons.
+
+<img width="280" height="187" alt="image" src="https://github.com/user-attachments/assets/e226c757-f58f-4969-a88e-0139353f12fb" />
 
 ## Features
 
 - Same layout and text size as the built-in Hunt Ledger.
 - XP and luminance for the last 5 minutes, per hour, and in total.
-- Estimated time to your next level, using Conquest's level table (levels 1-300).
+- Estimated time to your next level, using the Conquest specific level table (levels 1-300).
 - Starts luminance tracking automatically when you log in and refreshes it on an interval (adjustable in settings).
 - `/lph` replies are hidden from your chat windows.
 - Automatically deposits all valid items into your bank with `/b d` on an interval (adjustable in settings).
@@ -14,7 +16,7 @@ An XP and luminance tracker plugin for the AC:Unreal client, made for the Conque
 ## Requirements
 
 - AC:Unreal client build 123 (2026.10.18) or newer.
-- The Conquest server. `/lph` and `/b d` are Conquest commands; on other servers the luminance column stays at `--` and `/b d` isn't recognized.
+- The Conquest server. `/lph` and `/b d` are Conquest specific commands; on other servers the luminance column stays at `--` and `/b d` isn't recognized.
 
 ## Install
 
