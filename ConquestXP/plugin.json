@@ -1,0 +1,12 @@
+{
+  "api": 2,
+  "mode": "companion",
+  "id": "conquest_xp",
+  "name": "Conquest XP",
+  "short_name": "CXP",
+  "version": "1.1.1",
+  "description": "XP and luminance rates for Conquest: Hunt Ledger's XP figures, luminance from the server's /lph tracker, and an automatic /b d bank deposit.",
+  "presentation": {"title": "Conquest XP", "controls": "none", "settings": false, "status": false},
+  "permissions": ["data", "chat", "chat_filter", "say", "ui", "state"],
+  "settings": []
+}
