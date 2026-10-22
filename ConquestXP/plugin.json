@@ -4,8 +4,8 @@
   "id": "conquest_xp",
   "name": "Conquest XP",
   "short_name": "CXP",
-  "version": "1.1.1",
-  "description": "XP and luminance rates for Conquest: Hunt Ledger's XP figures, luminance from the server's /lph tracker, and an automatic /b d bank deposit.",
+  "version": "1.2.9",
+  "description": "XP and luminance rates for Conquest: Hunt Ledger's XP figures, luminance from the server's /lph tracker, an automatic /b d bank deposit, and your MMDs, Conquest Coins, Dragon Coins and Legendary Keys from /b.",
   "presentation": {"title": "Conquest XP", "controls": "none", "settings": false, "status": false},
   "permissions": ["data", "chat", "chat_filter", "say", "ui", "state"],
   "settings": []

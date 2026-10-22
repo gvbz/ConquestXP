@@ -1,22 +1,24 @@
 # ConquestXP
 
-An XP and luminance tracker plugin for the AC:Unreal client made specifically for the Conquest server. XP figures use the same calculation as the client's built-in Hunt Ledger, but includes the extended 275-300 xp table. Luminance comes from server `/lph` commands.
+An XP and luminance tracker plugin for the AC:Unreal client made specifically for the Conquest server. XP figures use the same calculation as the client's built-in Hunt Ledger, but includes the extended 275-300 xp table. Luminance comes from server `/lph` commands, and your bank balances from the server `/b` command.
 
 <img width="277" height="186" alt="image" src="https://github.com/user-attachments/assets/b7eac8b2-c740-4dc2-96a0-968e1f267e00" />
 
 ## Features
 
-- Same layout and text size as the built-in Hunt Ledger.
-- XP and luminance for the last 5 minutes, per hour, and in total.
+- Same layout as the built-in Hunt Ledger, with larger text sized to stay sharp.
+- XP and luminance for the last 5 minutes and per hour, your XP total, and the luminance in your bank.
 - Estimated time to your next level, using the Conquest specific level table (levels 1-300).
+- Bank balances with their item symbols: MMDs, Conquest Coins, Dragon Coins and Legendary Keys.
 - Starts luminance tracking automatically when you log in and refreshes it on an interval (adjustable in settings).
-- `/lph` replies are hidden from your chat windows.
+- Reads your bank balances with `/b` 30 seconds after you log in, then on an interval (adjustable in settings).
+- `/lph` replies, and the replies to the plugin's own `/b`, are hidden from your chat windows.
 - Automatically deposits all valid items into your bank with `/b d` on an interval (adjustable in settings).
 
 ## Requirements
 
-- AC:Unreal client build 123 (2026.10.18) or newer.
-- The Conquest server. `/lph` and `/b d` are Conquest specific commands; on other servers the luminance column stays at `--` and `/b d` isn't recognized.
+- AC:Unreal client build 126 (2026.10.19) or newer.
+- The Conquest server. `/lph`, `/b` and `/b d` are Conquest specific commands; on other servers the luminance and bank values stay at `--` and `/b d` isn't recognized.
 
 ## Install
 
@@ -38,13 +40,20 @@ Replace the files in `Installed\ConquestXP` with the new download and press **Re
 |---|---|---|
 | **Last 5 min** | XP gained in the last 5 minutes | Conquest's 5-minute luminance rate, divided by 12 |
 | **Per hour** | XP since login or Reset, divided by the time elapsed | Conquest's luminance per hour |
-| **Total** | XP gained since login or Reset | luminance earned since tracking started |
+| **Total** | XP gained since login or Reset | the luminance in your bank, from `/b` |
 
-- **Next level (est.)**: the XP still needed for your next level, divided by your average XP rate since login or Reset. Before any XP comes in it shows `Waiting for XP`. At level 300 it shows `Max level`.
+- **Next level:** the estimated time to your next level: the XP still needed, divided by your average XP rate since login or Reset. Before any XP comes in it shows `Waiting for XP`. At level 300 it shows `Max level`.
+- **Bank column:** to the right of Luminance, each item's symbol and the amount in your bank:
+  - MMDs: your bank pyreals divided by 250,000, rounded down
+  - Conquest Coins
+  - Dragon Coins
+  - Legendary Keys
+
+  Hover over a symbol to see its name.
 - **Reset**: clears the XP figures and restarts luminance tracking (`/lph restart`).
 - **Settings**: shows or hides the settings below.
 
-XP only counts increases, so spending XP on skills or attributes never lowers your figures. Luminance shows `--` until the first `/lph` reply arrives, or while luminance tracking is off.
+The XP figures refresh every 15 seconds, and immediately after Reset or a level-up. XP only counts increases, so spending XP on skills or attributes never lowers your figures. The luminance rates show `--` until the first `/lph` reply arrives, or while luminance tracking is off. Total luminance and the bank column show `--` until the first `/b` reply, and update whenever a `/b` reply arrives, including a `/b` you type yourself.
 
 ### Settings
 
@@ -52,6 +61,7 @@ XP only counts increases, so spending XP on skills or attributes never lowers yo
 - **/lph update interval**: seconds between automatic `/lph` reads (30-300, default 90).
 - **Automatic /b d**: on by default. Deposits all valid items into your bank on the interval.
 - **/b d interval (minutes)**: minutes between automatic `/b d` (2-10, default 5). The first deposit comes one interval after you log in, turn the option on, or change the interval.
+- **/b update interval (minutes)**: minutes between automatic `/b` reads of your bank balances (2-10, default 5).
 
 Settings are saved per character.
 
@@ -60,9 +70,10 @@ Settings are saved per character.
 - `/lph start`: 8 seconds after you log in.
 - `/lph`: on the `/lph` update interval.
 - `/lph restart`: when you press Reset.
+- `/b`: 30 seconds after you log in, then on the `/b` update interval.
 - `/b d`: on the `/b d` interval, while Automatic /b d is on.
 
-Commands go out one at a time, at most one per second, so they never collide. Every `[LPH]` reply is hidden from your chat windows while the plugin runs, including replies to a `/lph` you type yourself. Other chat is not affected.
+Commands go out one at a time, at most one per second, so they never collide. Every `[LPH]` reply is hidden from your chat windows while the plugin runs, including replies to a `/lph` you type yourself. The `[BANK]` reply to the plugin's own `/b` is hidden for 10 seconds after it is sent, so a `/b` you type yourself stays visible. Other chat is not affected.
 
 ## Permissions
 
@@ -71,9 +82,9 @@ The plugin uses the following service requests:
 | Permission | Used for |
 |---|---|
 | data | your total XP and level |
-| chat | reading the `/lph` replies |
-| chat_filter | hiding the `[LPH]` replies from your chat windows |
-| say | sending `/lph` and `/b d` |
+| chat | reading the `/lph` and `/b` replies |
+| chat_filter | hiding the `[LPH]` replies, and the replies to its own `/b`, from your chat windows |
+| say | sending `/lph`, `/b` and `/b d` |
 | ui | its window |
 | state | saving your settings |
 

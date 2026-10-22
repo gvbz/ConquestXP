@@ -1,4 +1,4 @@
--- Conquest XP 1.1.1: Hunt Ledger's XP figures plus Conquest's /lph luminance
+-- Conquest XP 1.2.9: Hunt Ledger's XP figures plus Conquest's /lph luminance
 -- (AC:Unreal API 2 companion).
 --
 -- XP: the same calculation as the client's Hunt Ledger (ACELedger.h,
@@ -6,15 +6,18 @@
 -- char_quads["1"]). Only increases count, so spending XP never subtracts.
 -- "Last 5 min" sums the gains of the last 300 seconds (one bucket per second),
 -- "Per hour" is the total since login or Reset divided by the time elapsed,
--- and "Next level (est.)" divides the XP still needed by that average rate.
+-- and "Next level:" (an estimate) divides the XP still needed by that average rate.
 -- The level table is Conquest's (levels 1-300), since plugins can't read the
--- game's DAT table.
+-- game's DAT table. XP is counted every callback, but the XP figures shown
+-- refresh every 15 seconds (XP_SHOW_S), and at once after Reset, a level-up
+-- or a character change.
 --
 -- Luminance: Conquest banks luminance, so it comes from the server's /lph
 -- tracker instead of the character. After login the plugin sends "@lph start",
 -- then "@lph" every 90 seconds (Settings). Replies look like
 --   [LPH] You've earned 290,725 Luminance in 00:21:13 for 821,536 Lum/hour (5min 891,144 Lum/hour).
--- Total = earned, Per hour = Lum/hour, Last 5 min = the 5-minute rate / 12.
+-- Per hour = Lum/hour, Last 5 min = the 5-minute rate / 12. The Total row
+-- shows the luminance in your bank, from the "Luminance:" line of /b (below).
 -- Every "[LPH]" reply is hidden from the chat windows (display only).
 -- Reset clears the XP figures and sends "@lph restart". Switching luminance
 -- tracking off in Settings sends "@lph stop". Commands go out with "@" because
@@ -24,10 +27,28 @@
 -- 2-10 minutes (default 5), which deposits all valid items into the
 -- character's bank. The first deposit is one interval after login, switching
 -- it on, or changing the interval. Sent only while a character is logged in.
+--
+-- Bank column: MMDs, Conquest Coins, Dragon Coins and Legendary Keys, read
+-- from Conquest's "/b" reply 30 seconds after login and then every 2-10
+-- minutes (default 5). The reply looks like
+--   [BANK] Pyreals: 2,270,035,723
+--   [BANK] Luminance: 15,013,916
+--   [BANK] Event Tokens [Dragon Coins] (non-transferable): 29
+--   [BANK] Conquest Coins (non-transferable): 1,917
+--   [BANK] Legendary Keys: 3,376
+-- (plus other lines). MMDs = Pyreals / 250,000, rounded down. Any [BANK]
+-- reply updates the counts, including a /b you type. The plugin's own /b
+-- replies are hidden for 10 s from when it sends /b (a timed chat filter sent
+-- with the request); a /b you type later stays visible.
+-- The client drops a plugin's chat filters on logout or character change, so
+-- they are sent again for each character.
 
-local OPT_DEFAULT = {lum = true, lph_s = 90, bank = true, bank_m = 5}
-local SIZE = 12          -- Hunt Ledger's text size
+local OPT_DEFAULT = {lum = true, lph_s = 90, bank = true, bank_m = 5, bal_m = 5}
+local SIZE = 15          -- 20 px: lands exactly on the game's basefont20, so it stays
+                         -- sharp (13/14 are stretched and look soft; 12 and 18 are also exact)
 local START_DELAY = 8    -- seconds after login before "@lph start"
+local BAL_DELAY = 30     -- seconds after login before the first "@b"
+local BAL_HIDE = 10      -- seconds the plugin's own [BANK] replies are hidden
 
 local XP_LEVEL = {
   0, 1000, 2777, 5697, 10248, 17031, 26784, 40391, 58895, 83511,
@@ -61,6 +82,23 @@ local XP_LEVEL = {
   212606904701, 216349962105, 220146300445, 223996678153, 227901864460, 231862639544, 235879794689, 239954132442, 244086466776, 248277623248,
   252528439169, 256839763767, 261212458359, 265647396522, 270145464270, 274707560226, 279334595807, 284027495403, 288787196561, 293614650176}
 
+-- Bank column: one item per row (header, Last 5 min, Per hour, Total).
+-- icon/underlay/overlay/effects/item_type: the item's inventory artwork, as the
+-- Supply Ledger saved it (Trade Note (250,000) wcid 20630, Conquest Coin
+-- 13370001, Dragon Coin 13370002, Aged Legendary Key 48746). Without an icon
+-- the short label is shown instead.
+local BANK_ITEMS = {
+  {key = "mmd",  label = "MMD",  tip = "MMDs (bank pyreals / 250,000)",
+   icon = 100673377, underlay = 0, overlay = 0, effects = 0, item_type = 262144},
+  {key = "cc",   label = "CC",   tip = "Conquest Coins",
+   icon = 100667518, underlay = 0, overlay = 100669182, effects = 16, item_type = 128},
+  {key = "dc",   label = "DC",   tip = "Dragon Coins",
+   icon = 100667518, underlay = 0, overlay = 100667937, effects = 16, item_type = 128},
+  {key = "keys", label = "Keys", tip = "Legendary Keys",
+   icon = 100693001, underlay = 0, overlay = 0, effects = 64, item_type = 16384},
+}
+local BANK_RE = "^\\[BANK\\] (.+): ([\\d,]+)\\s*$"
+
 -- Helpers (no string.find/match/gsub in the sandbox) -----------------------
 local function commas(n)
   n = math.floor((tonumber(n) or 0) + 0.5)
@@ -84,15 +122,20 @@ local function opt(k) local v = st.opt[k]; if v == nil then return OPT_DEFAULT[k
 local dirty = false
 local player = nil
 local xp = {}                -- the Hunt Ledger: started, total, prev, has, buckets
+local XP_SHOW_S = 15      -- seconds between refreshes of the XP figures shown
+local xpv = {}           -- XP figures as last shown: at, level, five, hour, total, est
 local function reset_xp(now)
   xp = {started = now, total = 0, prev = 0, has = false, buckets = {}}
+  xpv = {}
 end
 local lum = {total = nil, hour = nil, five = nil, at = nil}
-local cmd = {queue = {}, sent_at = -1e9, serial = 0, started = false, next_poll = nil, start_at = nil, inflight = {}, next_bank = nil}
+local bal = {}               -- bank counts by BANK_ITEMS key
+local cmd = {queue = {}, sent_at = -1e9, serial = 0, started = false, next_poll = nil, start_at = nil, inflight = {}, next_bank = nil, next_bal = nil, hide_bank = false}
 local show_settings = false
 
 local function send(text) cmd.queue[#cmd.queue + 1] = text end
 local function bank_every() return 60 * math.max(2, math.min(10, math.floor(tonumber(opt("bank_m")) or 5))) end
+local function bal_every() return 60 * math.max(2, math.min(10, math.floor(tonumber(opt("bal_m")) or 5))) end
 
 -- XP ledger (FACEHuntLedger) ---------------------------------------------
 local function observe(total, now)
@@ -152,20 +195,66 @@ local function lph_line(text, now)
   end
 end
 
+-- /b replies -------------------------------------------------------------------
+local function bank_line(text)
+  if string.sub(text, 1, 6) ~= "[BANK]" or #text > 300 then return end
+  local m = regexmatch(text, BANK_RE)
+  if not m then return end
+  local name, n = m["1"], digits(m["2"])
+  if name == "Pyreals" then bal.mmd = n // 250000
+  elseif name == "Luminance" then bal.lum = n
+  elseif string.contains(name, "Dragon Coins") then bal.dc = n
+  elseif string.contains(name, "Conquest Coins") then bal.cc = n
+  elseif string.contains(name, "Legendary Keys") then bal.keys = n end
+end
+
 -- Window ----------------------------------------------------------------------
 -- Tight rows: no padding around the rows or their cells (the client's default
 -- is 2 px on every side of each). The client still adds 2-3 px between controls.
 local function cell(id, text) return {id = id, type = "text", size = SIZE, text = text, padding = 0} end
-local function row(id, a, b, c) return {id = id, type = "row", padding = 0, children = {cell(id .. "a", a), cell(id .. "b", b), cell(id .. "c", c)}} end
+-- Bank item: the item tile at ICON px (natural width), then the count at the
+-- window's text size, both straight in the row: a nested row would add the
+-- client's fixed 3 px around each of its children again. An item_icon's
+-- "size" also sets its own (empty) label's font, so the tile is kept small
+-- to keep the row about one text line high.
+local ICON = 16          -- smallest tile the client allows
+local function add_item(kids, id, it)
+  local n = bal[it.key]
+  local count = n and commas(n) or "--"
+  if it.icon then
+    kids[#kids + 1] = {id = id .. "i", type = "item_icon", size = ICON, padding = 0, auto_width = true, tooltip = it.tip,
+      icon = it.icon, underlay = it.underlay, overlay = it.overlay, effects = it.effects, item_type = it.item_type}
+    local c = cell(id .. "n", count); c.tooltip = it.tip
+    kids[#kids + 1] = c
+  else
+    local c = cell(id .. "n", it.label .. "  " .. count); c.tooltip = it.tip
+    kids[#kids + 1] = c
+  end
+end
+local function row(id, a, b, c, it)
+  local kids = {cell(id .. "a", a), cell(id .. "b", b), cell(id .. "c", c)}
+  if it then add_item(kids, id .. "d", it) end
+  return {id = id, type = "row", padding = 0, children = kids}
+end
 local function lumtext(v) if not opt("lum") or v == nil then return "--" end; return commas(v) end
 
 local function build(now, level, total)
+  if not xpv.at or now - xpv.at >= XP_SHOW_S or level ~= xpv.level then
+    xpv = {at = now, level = level, five = commas(last5(now)), hour = commas(per_hour(xp.total, now)), total = commas(xp.total),
+      est = estimate(level, total, now)}
+  end
   local ui = {
-    row("h", "", "XP", "Luminance"),
-    row("r5", "Last 5 min", commas(last5(now)), lumtext(lum.five)),
-    row("rh", "Per hour", commas(per_hour(xp.total, now)), lumtext(lum.hour)),
-    row("rt", "Total", commas(xp.total), lumtext(lum.total)),
-    {id = "est", type = "row", padding = 0, children = {cell("esta", "Next level (est.)"), cell("estb", estimate(level, total, now))}},
+    row("h", "", "XP", "Luminance", BANK_ITEMS[1]),
+    row("r5", "Last 5 min", xpv.five, lumtext(lum.five), BANK_ITEMS[2]),
+    row("rh", "Per hour", xpv.hour, lumtext(lum.hour), BANK_ITEMS[3]),
+    row("rt", "Total", xpv.total, bal.lum and commas(bal.lum) or "--", BANK_ITEMS[4]),
+    -- Next level: same columns as the rows above, the estimate under XP. An
+    -- empty natural-width cell stands in for the item tile (the estimate still
+    -- starts a few px right of the XP numbers: the tile is wider than nothing).
+    {id = "est", type = "row", padding = 0, children = {
+      (function() local c = cell("esta", "Next level:"); c.wrap = false; c.tooltip = "Estimated time to your next level"; return c end)(),
+      (function() local c = cell("estb", xpv.est); c.wrap = false; return c end)(), cell("estc", ""),
+      {id = "estd", type = "text", size = SIZE, text = "", padding = 0, auto_width = true}, cell("este", "")}},
     {id = "btns", type = "row", children = {
       {id = "reset", type = "button", size = SIZE, text = "Reset", tooltip = "Clear the XP figures and restart luminance tracking (/lph restart)"},
       {id = "settings", type = "button", size = SIZE, text = "Settings"}}},
@@ -179,6 +268,8 @@ local function build(now, level, total)
       tooltip = "Deposits all valid items into your bank on the interval"}
     ui[#ui + 1] = {id = "opt|bank_m", type = "number", size = SIZE, text = "/b d interval (minutes)", min = 2, max = 10, step = 1,
       value = tonumber(opt("bank_m")) or 5, enabled = opt("bank"), tooltip = "Minutes between automatic /b d (2-10)"}
+    ui[#ui + 1] = {id = "opt|bal_m", type = "number", size = SIZE, text = "/b update interval (minutes)", min = 2, max = 10, step = 1,
+      value = tonumber(opt("bal_m")) or 5, tooltip = "Minutes between automatic /b reads of your bank balances (2-10)"}
   end
   return ui
 end
@@ -191,15 +282,17 @@ return function(s, p)
     st = {opt = type(saved.opt) == "table" and saved.opt or {}}
     reset_xp(now)
     cmd.start_at = now + START_DELAY
-    -- Hide every [LPH] reply from the chat windows while the plugin runs.
-    out.chat_filters = {{id = "lph", prefix = "[LPH]", sender = ""}}
   end
   -- A different character: start over.
   local pl = tonumber(s.player)
   if pl and pl ~= player then
-    if player then reset_xp(now); lum = {}; cmd.started = false; cmd.start_at = now + START_DELAY end
+    if player then reset_xp(now); lum = {}; bal = {}; cmd.started = false; cmd.start_at = now + START_DELAY end
     player = pl
     cmd.next_bank = now + bank_every()
+    cmd.next_bal = now + BAL_DELAY
+    -- Hide every [LPH] reply from the chat windows while the plugin runs (the
+    -- client drops plugin filters on logout or character change).
+    out.chat_filters = {{id = "lph", prefix = "[LPH]", sender = ""}}
   end
 
   -- XP from the full snapshot (data permission)
@@ -219,7 +312,11 @@ return function(s, p)
       elseif id == "settings" then show_settings = not show_settings end
     elseif e.type == "change" and string.sub(id, 1, 4) == "opt|" then
       local k = string.sub(id, 5)
-      if k == "lph_s" then
+      if k == "bal_m" then
+        local v = math.floor(tonumber(e.value) or 5)
+        st.opt.bal_m = math.max(2, math.min(10, v))
+        cmd.next_bal = now + bal_every()
+      elseif k == "lph_s" then
         local v = math.floor(tonumber(e.value) or 90)
         st.opt.lph_s = math.max(30, math.min(300, v))
       elseif k == "bank_m" then
@@ -240,7 +337,7 @@ return function(s, p)
 
   -- Chat: /lph replies
   for _, e in ipairs(s.chat_events or {}) do
-    if (e.sender or "") == "" and type(e.raw_text) == "string" then lph_line(e.raw_text, now) end
+    if (e.sender or "") == "" and type(e.raw_text) == "string" then lph_line(e.raw_text, now); bank_line(e.raw_text) end
   end
 
   -- /lph start after login, then /lph on the interval
@@ -254,6 +351,10 @@ return function(s, p)
   -- Automatic bank deposit on its interval, while logged in.
   if opt("bank") and player and cmd.next_bank and now >= cmd.next_bank then
     send("@b d"); cmd.next_bank = now + bank_every()
+  end
+  -- Bank balances: /b 30 s after login, then on its interval.
+  if player and cmd.next_bal and now >= cmd.next_bal then
+    send("@b"); cmd.next_bal = now + bal_every()
   end
   -- A send refused by the rate limit goes again.
   for _, e in ipairs(s.events or {}) do
@@ -271,6 +372,12 @@ return function(s, p)
     cmd.inflight[id] = text
     out.requests = {{id = id, service = "chat", operation = "send", text = text}}
     cmd.sent_at = now
+    -- Our own /b: hide its [BANK] reply for BAL_HIDE seconds. The client installs
+    -- the rule before this request is sent; the full set replaces the old one.
+    if text == "@b" then
+      out.chat_filters = {{id = "lph", prefix = "[LPH]", sender = ""},
+        {id = "bank", prefix = "[BANK]", sender = "", seconds = BAL_HIDE}}
+    end
   end
 
   out.ui = build(now, level, total)
