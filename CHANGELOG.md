@@ -1,9 +1,10 @@
 # Changelog
 
-## 1.2.9 (2026-10-21)
+## 1.3.0 (2026-10-21)
 
 - New bank column to the right of Luminance: MMDs, Conquest Coins, Dragon Coins and Legendary Keys, each with its item symbol. MMDs are your bank pyreals divided by 250,000, rounded down.
 - Bank balances are read with `/b` 30 seconds after login, then every 2-10 minutes (new setting "/b update interval (minutes)", default 5). The replies to the plugin's own `/b` are hidden from chat.
+- Conquest Coins earned per hour, in brackets beside the coin count.
 - Total luminance now shows the luminance in your bank, from `/b`.
 - XP figures refresh every 15 seconds, and immediately after Reset or a level-up.
 - "Next level (est.)" is now "Next level:", with the estimate under the XP column.

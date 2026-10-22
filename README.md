@@ -10,6 +10,7 @@ An XP and luminance tracker plugin for the AC:Unreal client made specifically fo
 - XP and luminance for the last 5 minutes and per hour, your XP total, and the luminance in your bank.
 - Estimated time to your next level, using the Conquest specific level table (levels 1-300).
 - Bank balances with their item symbols: MMDs, Conquest Coins, Dragon Coins and Legendary Keys.
+- Conquest Coins earned per hour, shown in brackets beside the coin count.
 - Starts luminance tracking automatically when you log in and refreshes it on an interval (adjustable in settings).
 - Reads your bank balances with `/b` 30 seconds after you log in, then on an interval (adjustable in settings).
 - `/lph` replies, and the replies to the plugin's own `/b`, are hidden from your chat windows.
@@ -45,15 +46,17 @@ Replace the files in `Installed\ConquestXP` with the new download and press **Re
 - **Next level:** the estimated time to your next level: the XP still needed, divided by your average XP rate since login or Reset. Before any XP comes in it shows `Waiting for XP`. At level 300 it shows `Max level`.
 - **Bank column:** to the right of Luminance, each item's symbol and the amount in your bank:
   - MMDs: your bank pyreals divided by 250,000, rounded down
-  - Conquest Coins
+  - Conquest Coins, with the coins earned per hour in brackets, e.g. `1,929 (117/h)`
   - Dragon Coins
   - Legendary Keys
 
   Hover over a symbol to see its name.
-- **Reset**: clears the XP figures and restarts luminance tracking (`/lph restart`).
+- **Reset**: clears the XP figures and the coins per hour, and restarts luminance tracking (`/lph restart`).
 - **Settings**: shows or hides the settings below.
 
 The XP figures refresh every 15 seconds, and immediately after Reset or a level-up. XP only counts increases, so spending XP on skills or attributes never lowers your figures. The luminance rates show `--` until the first `/lph` reply arrives, or while luminance tracking is off. Total luminance and the bank column show `--` until the first `/b` reply, and update whenever a `/b` reply arrives, including a `/b` you type yourself.
+
+Coins per hour adds up the coins that arrive in your bank between `/b` replies, divided by the time since the first reply after you log in or press Reset. It appears from the second `/b` reply (about 5 minutes after login) and updates with each `/b`. Spending coins doesn't lower it. Coins still in your packs are counted once `/b d` deposits them.
 
 ### Settings
 

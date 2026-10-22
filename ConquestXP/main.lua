@@ -1,4 +1,4 @@
--- Conquest XP 1.2.9: Hunt Ledger's XP figures plus Conquest's /lph luminance
+-- Conquest XP 1.3.0: Hunt Ledger's XP figures plus Conquest's /lph luminance
 -- (AC:Unreal API 2 companion).
 --
 -- XP: the same calculation as the client's Hunt Ledger (ACELedger.h,
@@ -42,6 +42,12 @@
 -- with the request); a /b you type later stays visible.
 -- The client drops a plugin's chat filters on logout or character change, so
 -- they are sent again for each character.
+--
+-- Conquest Coins per hour, shown in brackets after the coin count: the coins
+-- added to the bank between /b readings (increases only, so spending doesn't
+-- count against it), divided by the time from the first reading after login
+-- or Reset to the latest one. Shown once a minute or more has passed between
+-- readings. Coins still in your packs count once /b d deposits them.
 
 local OPT_DEFAULT = {lum = true, lph_s = 90, bank = true, bank_m = 5, bal_m = 5}
 local SIZE = 15          -- 20 px: lands exactly on the game's basefont20, so it stays
@@ -90,7 +96,7 @@ local XP_LEVEL = {
 local BANK_ITEMS = {
   {key = "mmd",  label = "MMD",  tip = "MMDs (bank pyreals / 250,000)",
    icon = 100673377, underlay = 0, overlay = 0, effects = 0, item_type = 262144},
-  {key = "cc",   label = "CC",   tip = "Conquest Coins",
+  {key = "cc",   label = "CC",   tip = "Conquest Coins (coins per hour since login or Reset)",
    icon = 100667518, underlay = 0, overlay = 100669182, effects = 16, item_type = 128},
   {key = "dc",   label = "DC",   tip = "Dragon Coins",
    icon = 100667518, underlay = 0, overlay = 100667937, effects = 16, item_type = 128},
@@ -130,6 +136,7 @@ local function reset_xp(now)
 end
 local lum = {total = nil, hour = nil, five = nil, at = nil}
 local bal = {}               -- bank counts by BANK_ITEMS key
+local ccr = {}               -- Conquest Coins rate: base_at, last, last_at, gained
 local cmd = {queue = {}, sent_at = -1e9, serial = 0, started = false, next_poll = nil, start_at = nil, inflight = {}, next_bank = nil, next_bal = nil, hide_bank = false}
 local show_settings = false
 
@@ -196,7 +203,16 @@ local function lph_line(text, now)
 end
 
 -- /b replies -------------------------------------------------------------------
-local function bank_line(text)
+local function cc_reading(n, now)
+  if ccr.last then ccr.gained = ccr.gained + math.max(0, n - ccr.last)
+  else ccr.base_at, ccr.gained = now, 0 end
+  ccr.last, ccr.last_at = n, now
+end
+local function cc_rate()
+  if not ccr.last_at or ccr.last_at - ccr.base_at < 60 then return nil end
+  return math.floor(ccr.gained * 3600 / (ccr.last_at - ccr.base_at) + 0.5)
+end
+local function bank_line(text, now)
   if string.sub(text, 1, 6) ~= "[BANK]" or #text > 300 then return end
   local m = regexmatch(text, BANK_RE)
   if not m then return end
@@ -204,7 +220,7 @@ local function bank_line(text)
   if name == "Pyreals" then bal.mmd = n // 250000
   elseif name == "Luminance" then bal.lum = n
   elseif string.contains(name, "Dragon Coins") then bal.dc = n
-  elseif string.contains(name, "Conquest Coins") then bal.cc = n
+  elseif string.contains(name, "Conquest Coins") then bal.cc = n; cc_reading(n, now)
   elseif string.contains(name, "Legendary Keys") then bal.keys = n end
 end
 
@@ -221,6 +237,10 @@ local ICON = 16          -- smallest tile the client allows
 local function add_item(kids, id, it)
   local n = bal[it.key]
   local count = n and commas(n) or "--"
+  if it.key == "cc" and n then
+    local r = cc_rate()
+    if r then count = count .. " (" .. commas(r) .. "/h)" end
+  end
   if it.icon then
     kids[#kids + 1] = {id = id .. "i", type = "item_icon", size = ICON, padding = 0, auto_width = true, tooltip = it.tip,
       icon = it.icon, underlay = it.underlay, overlay = it.overlay, effects = it.effects, item_type = it.item_type}
@@ -286,7 +306,7 @@ return function(s, p)
   -- A different character: start over.
   local pl = tonumber(s.player)
   if pl and pl ~= player then
-    if player then reset_xp(now); lum = {}; bal = {}; cmd.started = false; cmd.start_at = now + START_DELAY end
+    if player then reset_xp(now); lum = {}; bal = {}; ccr = {}; cmd.started = false; cmd.start_at = now + START_DELAY end
     player = pl
     cmd.next_bank = now + bank_every()
     cmd.next_bal = now + BAL_DELAY
@@ -308,6 +328,8 @@ return function(s, p)
     if e.type == "click" then
       if id == "reset" then
         reset_xp(now); xp.prev, xp.has = total or 0, total ~= nil
+        -- Coins per hour starts again from the current count.
+        ccr = {}; if bal.cc then cc_reading(bal.cc, now) end
         if opt("lum") then send("@lph restart"); cmd.next_poll = now + 5 end
       elseif id == "settings" then show_settings = not show_settings end
     elseif e.type == "change" and string.sub(id, 1, 4) == "opt|" then
@@ -337,7 +359,7 @@ return function(s, p)
 
   -- Chat: /lph replies
   for _, e in ipairs(s.chat_events or {}) do
-    if (e.sender or "") == "" and type(e.raw_text) == "string" then lph_line(e.raw_text, now); bank_line(e.raw_text) end
+    if (e.sender or "") == "" and type(e.raw_text) == "string" then lph_line(e.raw_text, now); bank_line(e.raw_text, now) end
   end
 
   -- /lph start after login, then /lph on the interval
