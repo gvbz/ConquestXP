@@ -6,11 +6,10 @@ An XP and luminance tracker plugin for the AC:Unreal client made specifically fo
 
 ## Features
 
-- Same layout as the built-in Hunt Ledger, with larger text sized to stay sharp.
-- XP and luminance for the last 5 minutes and per hour, your XP total, and the luminance in your bank.
+- XP and luminance for the last 5 minutes and per hour, XP total per session, and banked luminance.
 - Estimated time to your next level, using the Conquest specific level table (levels 1-300).
 - Bank balances with their item symbols: MMDs, Conquest Coins, Dragon Coins and Legendary Keys.
-- Conquest Coins earned per hour, shown in brackets beside the coin count.
+- Conquest Coins earned per hour, shown in brackets beside the coin count. This takes approx. 5 minutes to display.
 - Starts luminance tracking automatically when you log in and refreshes it on an interval (adjustable in settings).
 - Reads your bank balances with `/b` 30 seconds after you log in, then on an interval (adjustable in settings).
 - `/lph` replies, and the replies to the plugin's own `/b`, are hidden from your chat windows.
@@ -29,7 +28,7 @@ An XP and luminance tracker plugin for the AC:Unreal client made specifically fo
 
 ## Updating
 
-Replace the files in `Installed\ConquestXP` with the new download and press **Refresh** in Manage Plugins. Your settings are saved outside this folder, so they are retained.
+Replace the files in `Installed\ConquestXP` with the new download and press **Refresh** in Manage Plugins. Your settings are retained.
 
 ## In game
 
