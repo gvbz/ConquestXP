@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.3.1 (2026-10-21)
+
+- Larger item symbols in the bank column (20 px, was 16).
+
 ## 1.3.0 (2026-10-21)
 
 - New bank column to the right of Luminance: MMDs, Conquest Coins, Dragon Coins and Legendary Keys, each with its item symbol. MMDs are your bank pyreals divided by 250,000, rounded down.

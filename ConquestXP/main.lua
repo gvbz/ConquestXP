@@ -1,4 +1,4 @@
--- Conquest XP 1.3.0: Hunt Ledger's XP figures plus Conquest's /lph luminance
+-- Conquest XP 1.3.1: Hunt Ledger's XP figures plus Conquest's /lph luminance
 -- (AC:Unreal API 2 companion).
 --
 -- XP: the same calculation as the client's Hunt Ledger (ACELedger.h,
@@ -233,7 +233,7 @@ local function cell(id, text) return {id = id, type = "text", size = SIZE, text 
 -- client's fixed 3 px around each of its children again. An item_icon's
 -- "size" also sets its own (empty) label's font, so the tile is kept small
 -- to keep the row about one text line high.
-local ICON = 16          -- smallest tile the client allows
+local ICON = 20          -- user's choice; the game's item pictures are 32 px (16 is the client minimum)
 local function add_item(kids, id, it)
   local n = bal[it.key]
   local count = n and commas(n) or "--"
