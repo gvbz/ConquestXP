@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.4.3 (2026-10-26)
+
+- Bank commands are sent at least 6 seconds apart. If the server asks to wait ("You must wait ... before using this bank command again."), the command is sent again once the wait is over, and the message is hidden.
+
+## 1.4.2 (2026-10-26)
+
+- The whole reply to the plugin's own `/b d` is hidden, including the "Deposited ..." lines.
+- `[LPH]` replies are hidden only after the plugin's own `/lph`. A `/lph` you type now shows.
+- Commands you type yourself always show in full.
+
+## 1.4.1 (2026-10-26)
+
+- The "No ... to deposit" lines from the plugin's own `/b d` are hidden.
+- New plugin bar icon.
+
+## 1.4.0 (2026-10-26)
+
+- Conquest Coins per hour now counts the coins handed to you ("... gives you Conquest Coin.") since login or Reset. Shown after 5 minutes.
+- Lighter: runs every 2 seconds and asks the client only for XP, level and chat, instead of a full snapshot. The window is sent only when something in it changes.
+- Needs AC:Unreal client build 135 or newer.
+
 ## 1.3.1 (2026-10-21)
 
 - Larger item symbols in the bank column (20 px, was 16).

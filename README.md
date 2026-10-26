@@ -12,12 +12,12 @@ An XP and luminance tracker plugin for the AC:Unreal client made specifically fo
 - Conquest Coins earned per hour, shown in brackets beside the coin count. This takes approx. 5 minutes to display.
 - Starts luminance tracking automatically when you log in and refreshes it on an interval (adjustable in settings).
 - Reads your bank balances with `/b` 30 seconds after you log in, then on an interval (adjustable in settings).
-- `/lph` replies, and the replies to the plugin's own `/b`, are hidden from your chat windows.
+- Replies to the plugin's own `/lph`, `/b` and `/b d` are hidden from your chat windows. The same commands typed by you show as normal.
 - Automatically deposits all valid items into your bank with `/b d` on an interval (adjustable in settings).
 
 ## Requirements
 
-- AC:Unreal client build 126 (2026.10.19) or newer.
+- AC:Unreal client build 135 (2026.10.24) or newer.
 - The Conquest server. `/lph`, `/b` and `/b d` are Conquest specific commands; on other servers the luminance and bank values stay at `--` and `/b d` isn't recognized.
 
 ## Install
@@ -55,7 +55,7 @@ Replace the files in `Installed\ConquestXP` with the new download and press **Re
 
 The XP figures refresh every 15 seconds, and immediately after Reset or a level-up. XP only counts increases, so spending XP on skills or attributes never lowers your figures. The luminance rates show `--` until the first `/lph` reply arrives, or while luminance tracking is off. Total luminance and the bank column show `--` until the first `/b` reply, and update whenever a `/b` reply arrives, including a `/b` you type yourself.
 
-Coins per hour adds up the coins that arrive in your bank between `/b` replies, divided by the time since the first reply after you log in or press Reset. It appears from the second `/b` reply (about 5 minutes after login) and updates with each `/b`. Spending coins doesn't lower it. Coins still in your packs are counted once `/b d` deposits them.
+Coins per hour counts the coins handed to you since you logged in or pressed Reset ("Alpha Werewolf gives you Conquest Coin."), divided by the time elapsed. It appears after 5 minutes. Spending or depositing coins doesn't change it.
 
 ### Settings
 
@@ -75,7 +75,9 @@ Settings are saved per character.
 - `/b`: 30 seconds after you log in, then on the `/b` update interval.
 - `/b d`: on the `/b d` interval, while Automatic /b d is on.
 
-Commands go out one at a time, at most one per second, so they never collide. Every `[LPH]` reply is hidden from your chat windows while the plugin runs, including replies to a `/lph` you type yourself. The `[BANK]` reply to the plugin's own `/b` is hidden for 10 seconds after it is sent, so a `/b` you type yourself stays visible. Other chat is not affected.
+Commands go out one at a time, at most one per second, and bank commands at least 6 seconds apart. If the server asks to wait ("You must wait 2 more second(s) before using this bank command again."), the command is sent again once the wait is over.
+
+The server's replies to these commands (`[LPH]`, `[BANK]`, `Deposited ...`, `No ... to deposit` and the wait message) are hidden for 10 seconds after the plugin sends them. The same commands typed by you show in full. Other chat is not affected.
 
 ## Permissions
 
@@ -84,8 +86,8 @@ The plugin uses the following service requests:
 | Permission | Used for |
 |---|---|
 | data | your total XP and level |
-| chat | reading the `/lph` and `/b` replies |
-| chat_filter | hiding the `[LPH]` replies, and the replies to its own `/b`, from your chat windows |
+| chat | reading the `/lph` and `/b` replies, and the coins handed to you |
+| chat_filter | hiding the replies to its own `/lph`, `/b` and `/b d` from your chat windows |
 | say | sending `/lph`, `/b` and `/b d` |
 | ui | its window |
 | state | saving your settings |

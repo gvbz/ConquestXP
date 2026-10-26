@@ -1,4 +1,4 @@
--- Conquest XP 1.3.1: Hunt Ledger's XP figures plus Conquest's /lph luminance
+-- Conquest XP 1.4.3: Hunt Ledger's XP figures plus Conquest's /lph luminance
 -- (AC:Unreal API 2 companion).
 --
 -- XP: the same calculation as the client's Hunt Ledger (ACELedger.h,
@@ -18,7 +18,7 @@
 --   [LPH] You've earned 290,725 Luminance in 00:21:13 for 821,536 Lum/hour (5min 891,144 Lum/hour).
 -- Per hour = Lum/hour, Last 5 min = the 5-minute rate / 12. The Total row
 -- shows the luminance in your bank, from the "Luminance:" line of /b (below).
--- Every "[LPH]" reply is hidden from the chat windows (display only).
+-- The replies to the plugin's own /lph commands are hidden (see "Chat" below).
 -- Reset clears the XP figures and sends "@lph restart". Switching luminance
 -- tracking off in Settings sends "@lph stop". Commands go out with "@" because
 -- the client sends a plugin's "/" text as speech.
@@ -27,6 +27,7 @@
 -- 2-10 minutes (default 5), which deposits all valid items into the
 -- character's bank. The first deposit is one interval after login, switching
 -- it on, or changing the interval. Sent only while a character is logged in.
+-- Its whole reply is hidden (see "Chat" below).
 --
 -- Bank column: MMDs, Conquest Coins, Dragon Coins and Legendary Keys, read
 -- from Conquest's "/b" reply 30 seconds after login and then every 2-10
@@ -37,24 +38,68 @@
 --   [BANK] Conquest Coins (non-transferable): 1,917
 --   [BANK] Legendary Keys: 3,376
 -- (plus other lines). MMDs = Pyreals / 250,000, rounded down. Any [BANK]
--- reply updates the counts, including a /b you type. The plugin's own /b
--- replies are hidden for 10 s from when it sends /b (a timed chat filter sent
--- with the request); a /b you type later stays visible.
+-- reply updates the counts, including a /b you type.
+--
+-- Chat: the server's replies to every command the plugin sends itself (/lph,
+-- /b, /b d) are hidden from the chat windows for 10 s from the send (timed
+-- chat filters sent with the request: "[LPH]", "[BANK]", "Deposited ..." and
+-- "No ... to deposit" lines with no sender). The same command typed by you
+-- shows in full. Display only: the lines still reach the plugin and the chat
+-- log file.
+-- Bank commands (/b, /b d) have a short server cooldown ("You must wait 2
+-- more second(s) before using this bank command again."). The plugin keeps
+-- its own bank commands at least 6 s apart, hides that line after its own
+-- command, and sends the refused command again once the wait is over.
 -- The client drops a plugin's chat filters on logout or character change, so
 -- they are sent again for each character.
 --
 -- Conquest Coins per hour, shown in brackets after the coin count: the coins
--- added to the bank between /b readings (increases only, so spending doesn't
--- count against it), divided by the time from the first reading after login
--- or Reset to the latest one. Shown once a minute or more has passed between
--- readings. Coins still in your packs count once /b d deposits them.
+-- handed to you since login or Reset, counted from the server's lines
+-- "<monster or NPC> gives you Conquest Coin." / "... gives you 3 Conquest
+-- Coins." (system lines, no sender), divided by the time since login or
+-- Reset. Shown once 5 minutes have passed. Spending or depositing coins
+-- doesn't change it; chat from before the plugin started isn't counted.
+--
+-- Lightweight (client build 135): plugin.json asks for a callback every 2 s
+-- ("update_interval") and only total XP, level and chat ("snapshot_fields"),
+-- so the client doesn't build its full snapshot (inventory, spells, vendor
+-- data) for this plugin. Clicks still answer at once. (Slower than 2 s would
+-- leave it far behind on the chat the client replays after a Refresh: a
+-- plugin gets at most 128 lines per callback.) The window is sent only when
+-- something it shows has changed.
 
 local OPT_DEFAULT = {lum = true, lph_s = 90, bank = true, bank_m = 5, bal_m = 5}
 local SIZE = 15          -- 20 px: lands exactly on the game's basefont20, so it stays
                          -- sharp (13/14 are stretched and look soft; 12 and 18 are also exact)
 local START_DELAY = 8    -- seconds after login before "@lph start"
 local BAL_DELAY = 30     -- seconds after login before the first "@b"
-local BAL_HIDE = 10      -- seconds the plugin's own [BANK] replies are hidden
+local HIDE_S = 10        -- seconds the replies to the plugin's own commands are hidden
+-- Reply lines of each command the plugin sends (server lines, no sender).
+local REPLY = {
+  lph = {{id = "lph", prefix = "[LPH]"}},
+  bank = {{id = "bank", prefix = "[BANK]"}, {id = "bank_wait", prefix = "You must wait ", contains = "bank command"}},
+  dep = {{id = "dep_none", prefix = "No ", contains = " to deposit"}, {id = "dep_done", prefix = "Deposited "},
+    {id = "dep_wait", prefix = "You must wait ", contains = "bank command"}}}
+local BANK_GAP = 6       -- seconds between the plugin's own bank commands
+local hide = {lph = 0, bank = 0, dep = 0}  -- until when (callback time) each group is hidden
+local function reply_group(text)
+  if text == "@b" then return "bank" elseif text == "@b d" then return "dep"
+  elseif string.sub(text, 1, 4) == "@lph" then return "lph" end
+end
+
+-- The plugin's chat filters: the replies to its own commands for HIDE_S
+-- seconds after sending. A returned set replaces the previous one, so every
+-- rule still running is sent again with its remaining time.
+local function chat_rules(now)
+  local f = {}
+  for g, rules in pairs(REPLY) do
+    if now < hide[g] then
+      local sec = math.ceil(hide[g] - now)
+      for _, r in ipairs(rules) do f[#f + 1] = {id = r.id, prefix = r.prefix, contains = r.contains, sender = "", seconds = sec} end
+    end
+  end
+  return f
+end
 
 local XP_LEVEL = {
   0, 1000, 2777, 5697, 10248, 17031, 26784, 40391, 58895, 83511,
@@ -136,11 +181,24 @@ local function reset_xp(now)
 end
 local lum = {total = nil, hour = nil, five = nil, at = nil}
 local bal = {}               -- bank counts by BANK_ITEMS key
-local ccr = {}               -- Conquest Coins rate: base_at, last, last_at, gained
+local ccr = {}               -- Conquest Coins rate: base_at (login or Reset), n (coins given since)
+local hist_serial = nil      -- chat up to this serial was before the plugin started
+local now_s = 0              -- this callback's time (for the coins per hour shown)
 local cmd = {queue = {}, sent_at = -1e9, serial = 0, started = false, next_poll = nil, start_at = nil, inflight = {}, next_bank = nil, next_bal = nil, hide_bank = false}
 local show_settings = false
 
 local function send(text) cmd.queue[#cmd.queue + 1] = text end
+cmd.bank_at, cmd.bank_cmd = -1e9, nil   -- the plugin's last bank command and when it was queued or sent
+-- "You must wait 2 more second(s) before using this bank command again."
+-- right after the plugin's own bank command: send that command again later.
+local function bank_wait_line(text, now)
+  if not cmd.bank_cmd or now - cmd.bank_at > HIDE_S or not string.contains(text, "bank command again") then return end
+  local m = regexmatch(text, "^You must wait (\\d+) more second")
+  if not m then return end
+  local at = now + (tonumber(m["1"]) or 2) + 1
+  if cmd.bank_cmd == "@b d" then cmd.next_bank = at else cmd.next_bal = at end
+  cmd.bank_cmd = nil
+end
 local function bank_every() return 60 * math.max(2, math.min(10, math.floor(tonumber(opt("bank_m")) or 5))) end
 local function bal_every() return 60 * math.max(2, math.min(10, math.floor(tonumber(opt("bal_m")) or 5))) end
 
@@ -203,14 +261,17 @@ local function lph_line(text, now)
 end
 
 -- /b replies -------------------------------------------------------------------
-local function cc_reading(n, now)
-  if ccr.last then ccr.gained = ccr.gained + math.max(0, n - ccr.last)
-  else ccr.base_at, ccr.gained = now, 0 end
-  ccr.last, ccr.last_at = n, now
+local CC_MIN_S = 300      -- seconds after login or Reset before coins per hour is shown
+local CC_RE = "gives you (?:([\\d,]+) )?Conquest Coins?[.!]"
+-- "Alpha Werewolf gives you Conquest Coin." / "Hunter gives you 3 Conquest Coins."
+local function coin_line(text)
+  if not string.contains(text, "gives you") or not string.contains(text, "Conquest Coin") or #text > 300 then return end
+  local m = regexmatch(text, CC_RE)
+  if m then ccr.n = (ccr.n or 0) + ((m["1"] and digits(m["1"])) or 1) end
 end
-local function cc_rate()
-  if not ccr.last_at or ccr.last_at - ccr.base_at < 60 then return nil end
-  return math.floor(ccr.gained * 3600 / (ccr.last_at - ccr.base_at) + 0.5)
+local function cc_rate(now)
+  if not ccr.base_at or now - ccr.base_at < CC_MIN_S then return nil end
+  return math.floor((ccr.n or 0) * 3600 / (now - ccr.base_at) + 0.5)
 end
 local function bank_line(text, now)
   if string.sub(text, 1, 6) ~= "[BANK]" or #text > 300 then return end
@@ -220,7 +281,7 @@ local function bank_line(text, now)
   if name == "Pyreals" then bal.mmd = n // 250000
   elseif name == "Luminance" then bal.lum = n
   elseif string.contains(name, "Dragon Coins") then bal.dc = n
-  elseif string.contains(name, "Conquest Coins") then bal.cc = n; cc_reading(n, now)
+  elseif string.contains(name, "Conquest Coins") then bal.cc = n
   elseif string.contains(name, "Legendary Keys") then bal.keys = n end
 end
 
@@ -238,7 +299,7 @@ local function add_item(kids, id, it)
   local n = bal[it.key]
   local count = n and commas(n) or "--"
   if it.key == "cc" and n then
-    local r = cc_rate()
+    local r = cc_rate(now_s)
     if r then count = count .. " (" .. commas(r) .. "/h)" end
   end
   if it.icon then
@@ -258,11 +319,22 @@ local function row(id, a, b, c, it)
 end
 local function lumtext(v) if not opt("lum") or v == nil then return "--" end; return commas(v) end
 
-local function build(now, level, total)
+local function refresh_xpv(now, level, total)
   if not xpv.at or now - xpv.at >= XP_SHOW_S or level ~= xpv.level then
     xpv = {at = now, level = level, five = commas(last5(now)), hour = commas(per_hour(xp.total, now)), total = commas(xp.total),
       est = estimate(level, total, now)}
   end
+end
+-- Everything the window shows, as one text: the window is rebuilt and sent
+-- only when this changes.
+local function shown_key()
+  return table.concat({xpv.five, xpv.hour, xpv.total, xpv.est, tostring(lum.five), tostring(lum.hour), tostring(bal.lum), tostring(bal.mmd),
+    tostring(bal.cc), tostring(bal.dc), tostring(bal.keys), tostring(cc_rate(now_s)), tostring(show_settings),
+    tostring(opt("lum")), tostring(opt("lph_s")), tostring(opt("bank")), tostring(opt("bank_m")), tostring(opt("bal_m"))}, "|")
+end
+local last_key = nil
+
+local function build()
   local ui = {
     row("h", "", "XP", "Luminance", BANK_ITEMS[1]),
     row("r5", "Last 5 min", xpv.five, lumtext(lum.five), BANK_ITEMS[2]),
@@ -302,24 +374,26 @@ return function(s, p)
     st = {opt = type(saved.opt) == "table" and saved.opt or {}}
     reset_xp(now)
     cmd.start_at = now + START_DELAY
+    ccr = {base_at = now, n = 0}
+    hist_serial = tonumber(s.chat_latest_serial)
   end
+  now_s = now
   -- A different character: start over.
   local pl = tonumber(s.player)
   if pl and pl ~= player then
-    if player then reset_xp(now); lum = {}; bal = {}; ccr = {}; cmd.started = false; cmd.start_at = now + START_DELAY end
+    if player then reset_xp(now); lum = {}; bal = {}; ccr = {base_at = now, n = 0}; cmd.started = false; cmd.start_at = now + START_DELAY end
     player = pl
     cmd.next_bank = now + bank_every()
     cmd.next_bal = now + BAL_DELAY
-    -- Hide every [LPH] reply from the chat windows while the plugin runs (the
-    -- client drops plugin filters on logout or character change).
-    out.chat_filters = {{id = "lph", prefix = "[LPH]", sender = ""}}
+    -- The client drops plugin filters on logout or character change.
+    hide.lph, hide.bank, hide.dep = 0, 0, 0
   end
 
-  -- XP from the full snapshot (data permission)
+  -- Total XP and level (data permission; no full snapshot with snapshot_fields)
   local quads = type(s.char_quads) == "table" and s.char_quads or {}
   local ints = type(s.char_ints) == "table" and s.char_ints or {}
   local total = tonumber(quads["1"])
-  local level = tonumber(ints["25"])
+  local level = tonumber(s.level) or tonumber(ints["25"])
   observe(total, now)
 
   -- Events: buttons and settings
@@ -328,8 +402,8 @@ return function(s, p)
     if e.type == "click" then
       if id == "reset" then
         reset_xp(now); xp.prev, xp.has = total or 0, total ~= nil
-        -- Coins per hour starts again from the current count.
-        ccr = {}; if bal.cc then cc_reading(bal.cc, now) end
+        -- Coins per hour starts again.
+        ccr = {base_at = now, n = 0}
         if opt("lum") then send("@lph restart"); cmd.next_poll = now + 5 end
       elseif id == "settings" then show_settings = not show_settings end
     elseif e.type == "change" and string.sub(id, 1, 4) == "opt|" then
@@ -359,7 +433,10 @@ return function(s, p)
 
   -- Chat: /lph replies
   for _, e in ipairs(s.chat_events or {}) do
-    if (e.sender or "") == "" and type(e.raw_text) == "string" then lph_line(e.raw_text, now); bank_line(e.raw_text, now) end
+    if (e.sender or "") == "" and type(e.raw_text) == "string" then
+      lph_line(e.raw_text, now); bank_line(e.raw_text, now); bank_wait_line(e.raw_text, now)
+      if not (hist_serial and tonumber(e.serial) and tonumber(e.serial) <= hist_serial) then coin_line(e.raw_text) end
+    end
   end
 
   -- /lph start after login, then /lph on the interval
@@ -371,12 +448,13 @@ return function(s, p)
     end
   end
   -- Automatic bank deposit on its interval, while logged in.
-  if opt("bank") and player and cmd.next_bank and now >= cmd.next_bank then
-    send("@b d"); cmd.next_bank = now + bank_every()
+  -- Bank commands at least BANK_GAP seconds apart (server cooldown).
+  if opt("bank") and player and cmd.next_bank and now >= cmd.next_bank and now - cmd.bank_at >= BANK_GAP then
+    send("@b d"); cmd.next_bank = now + bank_every(); cmd.bank_at, cmd.bank_cmd = now, "@b d"
   end
   -- Bank balances: /b 30 s after login, then on its interval.
-  if player and cmd.next_bal and now >= cmd.next_bal then
-    send("@b"); cmd.next_bal = now + bal_every()
+  if player and cmd.next_bal and now >= cmd.next_bal and now - cmd.bank_at >= BANK_GAP then
+    send("@b"); cmd.next_bal = now + bal_every(); cmd.bank_at, cmd.bank_cmd = now, "@b"
   end
   -- A send refused by the rate limit goes again.
   for _, e in ipairs(s.events or {}) do
@@ -394,16 +472,19 @@ return function(s, p)
     cmd.inflight[id] = text
     out.requests = {{id = id, service = "chat", operation = "send", text = text}}
     cmd.sent_at = now
-    -- Our own /b: hide its [BANK] reply for BAL_HIDE seconds. The client installs
-    -- the rule before this request is sent; the full set replaces the old one.
-    if text == "@b" then
-      out.chat_filters = {{id = "lph", prefix = "[LPH]", sender = ""},
-        {id = "bank", prefix = "[BANK]", sender = "", seconds = BAL_HIDE}}
-    end
+    -- Our own command: hide its reply for HIDE_S seconds. The client installs
+    -- the rules before this request is sent.
+    local g = reply_group(text)
+    if g then hide[g] = now + HIDE_S; out.chat_filters = chat_rules(now) end
+    if text == "@b" or text == "@b d" then cmd.bank_at = now end
   end
 
-  out.ui = build(now, level, total)
-  out.status = ""
+  refresh_xpv(now, level, total)
+  local key = shown_key()
+  if key ~= last_key then
+    if not last_key then out.status = "" end
+    out.ui = build(); last_key = key
+  end
   if dirty then out.state = {opt = st.opt}; dirty = false end
   return out
 end
