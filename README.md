@@ -13,11 +13,12 @@ An XP and luminance tracker plugin for the AC:Unreal client made specifically fo
 - Starts luminance tracking automatically when you log in and refreshes it on an interval (adjustable in settings).
 - Reads your bank balances with `/b` 30 seconds after you log in, then on an interval (adjustable in settings).
 - Replies to the plugin's own `/lph`, `/b` and `/b d` are hidden from your chat windows. The same commands typed by you show as normal.
-- Automatically deposits all valid items into your bank with `/b d` on an interval (adjustable in settings).
+- Automatically deposits all valid items into your bank with `/b d` on an interval (adjustable in settings), with an optional one-line summary in chat of what was deposited.
+- Reset, Settings and the settings are hidden while the window is pinned.
 
 ## Requirements
 
-- AC:Unreal client build 135 (2026.10.24) or newer.
+- AC:Unreal client v146 or newer.
 - The Conquest server. `/lph`, `/b` and `/b d` are Conquest specific commands; on other servers the luminance and bank values stay at `--` and `/b d` isn't recognized.
 
 ## Install
@@ -52,6 +53,8 @@ Replace the files in `Installed\ConquestXP` with the new download and press **Re
   Hover over a symbol to see its name.
 - **Reset**: clears the XP figures and the coins per hour, and restarts luminance tracking (`/lph restart`).
 - **Settings**: shows or hides the settings below.
+- Numbers are right-aligned in their columns.
+- While the window is pinned, Reset, Settings and the settings are hidden. They show again when you unpin the window or hold Quick-show.
 
 The XP figures refresh every 15 seconds, and immediately after Reset or a level-up. XP only counts increases, so spending XP on skills or attributes never lowers your figures. The luminance rates show `--` until the first `/lph` reply arrives, or while luminance tracking is off. Total luminance and the bank column show `--` until the first `/b` reply, and update whenever a `/b` reply arrives, including a `/b` you type yourself.
 
@@ -63,6 +66,7 @@ Coins per hour counts the coins handed to you since you logged in or pressed Res
 - **/lph update interval**: seconds between automatic `/lph` reads (30-300, default 90).
 - **Automatic /b d**: on by default. Deposits all valid items into your bank on the interval.
 - **/b d interval (minutes)**: minutes between automatic `/b d` (2-10, default 5). The first deposit comes one interval after you log in, turn the option on, or change the interval.
+- **Show deposits in chat**: off by default. After each automatic `/b d`, one line in chat lists what was deposited, for example `[Conquest XP] Deposited: 19,053 pyreals, 87,500 pyreal peas, 1 Conquest Coins`. Nothing is shown when nothing was deposited. Only you see this line.
 - **/b update interval (minutes)**: minutes between automatic `/b` reads of your bank balances (2-10, default 5).
 
 Settings are saved per character.
@@ -86,10 +90,10 @@ The plugin uses the following service requests:
 | Permission | Used for |
 |---|---|
 | data | your total XP and level |
-| chat | reading the `/lph` and `/b` replies, and the coins handed to you |
+| chat | reading the `/lph`, `/b` and `/b d` replies, and the coins handed to you (only these server lines are delivered to the plugin) |
 | chat_filter | hiding the replies to its own `/lph`, `/b` and `/b d` from your chat windows |
 | say | sending `/lph`, `/b` and `/b d` |
-| ui | its window |
+| ui | its window, and the deposit summary line |
 | state | saving your settings |
 
 ## Credits

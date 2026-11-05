@@ -4,11 +4,57 @@
   "id": "conquest_xp",
   "name": "Conquest XP",
   "short_name": "CXP",
-  "version": "1.4.3",
+  "version": "1.5.0",
   "description": "XP and luminance rates for Conquest: Hunt Ledger's XP figures, luminance from the server's /lph tracker, an automatic /b d bank deposit, and your MMDs, Conquest Coins, Dragon Coins and Legendary Keys from /b.",
-  "presentation": {"title": "Conquest XP", "icon": "cxp.png", "controls": "none", "settings": false, "status": false},
+  "presentation": {
+    "title": "Conquest XP",
+    "icon": "cxp.png",
+    "controls": "none",
+    "settings": false,
+    "status": true
+  },
   "update_interval": 2,
-  "snapshot_fields": ["char_quads", "level", "chat_events", "chat_latest_serial"],
-  "permissions": ["data", "chat", "chat_filter", "say", "ui", "state"],
+  "snapshot_fields": [
+    "char_quads",
+    "level",
+    "chat_events"
+  ],
+  "chat_history": false,
+  "chat_subscriptions": [
+    {
+      "id": "lph",
+      "prefix": "[LPH]",
+      "sender_type": "server"
+    },
+    {
+      "id": "bank",
+      "prefix": "[BANK]",
+      "sender_type": "server"
+    },
+    {
+      "id": "bank_wait",
+      "prefix": "You must wait ",
+      "contains": "bank command",
+      "sender_type": "server"
+    },
+    {
+      "id": "coins",
+      "contains": "Conquest Coin",
+      "sender_type": "server"
+    },
+    {
+      "id": "deposits",
+      "prefix": "Deposited ",
+      "sender_type": "server"
+    }
+  ],
+  "permissions": [
+    "data",
+    "chat",
+    "chat_filter",
+    "say",
+    "ui",
+    "state"
+  ],
   "settings": []
 }

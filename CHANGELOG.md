@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.5.0 (2026-11-04)
+
+Needs AC:Unreal client v146 or newer.
+
+- While the window is pinned, Reset, Settings and the settings are hidden. They show again when you unpin it or hold Quick-show.
+- Numbers are right-aligned in their columns, and the label column has a fixed width, so "Next level:" lines up with the rows above.
+- New setting "Show deposits in chat" (off by default): after each automatic `/b d`, one line lists what was deposited.
+- The plugin now receives only the server lines it reads (`[LPH]`, `[BANK]`, deposits, the bank wait message and coins handed to you). Busy chat no longer reaches it, and a Refresh no longer replays the login's chat.
+- Lines are recognized by the client's sender type, so a player's chat can never be counted or hidden.
+- The window's status line shows an error if the client ever stops the plugin.
+
 ## 1.4.3 (2026-10-26)
 
 - Bank commands are sent at least 6 seconds apart. If the server asks to wait ("You must wait ... before using this bank command again."), the command is sent again once the wait is over, and the message is hidden.

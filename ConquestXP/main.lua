@@ -1,5 +1,5 @@
--- Conquest XP 1.4.3: Hunt Ledger's XP figures plus Conquest's /lph luminance
--- (AC:Unreal API 2 companion).
+-- Conquest XP 1.5.0: Hunt Ledger's XP figures plus Conquest's /lph luminance
+-- (AC:Unreal API 2 companion). Needs client v146 or newer.
 --
 -- XP: the same calculation as the client's Hunt Ledger (ACELedger.h,
 -- FACEHuntLedger) from the same source, total experience (snapshot
@@ -60,15 +60,25 @@
 -- Reset. Shown once 5 minutes have passed. Spending or depositing coins
 -- doesn't change it; chat from before the plugin started isn't counted.
 --
--- Lightweight (client build 135): plugin.json asks for a callback every 2 s
--- ("update_interval") and only total XP, level and chat ("snapshot_fields"),
--- so the client doesn't build its full snapshot (inventory, spells, vendor
--- data) for this plugin. Clicks still answer at once. (Slower than 2 s would
--- leave it far behind on the chat the client replays after a Refresh: a
--- plugin gets at most 128 lines per callback.) The window is sent only when
--- something it shows has changed.
+-- Deposit summary (Settings "Show deposits in chat", off by default): after
+-- the plugin's own /b d, one local line in chat lists what was deposited, e.g.
+--   [Conquest XP] Deposited: 19,053 pyreals, 87,500 pyreal peas, 1 Conquest Coins
+-- (nothing when nothing was deposited). Only you see it; nothing is sent.
+--
+-- Window: the numbers are right-aligned in their columns and the label column
+-- has a fixed width. While the window is pinned, Reset, Settings and the
+-- settings are hidden (the client shows them again when unpinned or while
+-- Quick-show is held).
+--
+-- Lightweight (client v146): plugin.json "chat_subscriptions" deliver only the
+-- server lines the plugin reads ([LPH], [BANK], the bank-wait line, coins
+-- handed to you and "Deposited ..."), starting at the newest line
+-- ("chat_history": false: no replay after a Refresh). A callback every 2 s
+-- ("update_interval") with only total XP, level and chat ("snapshot_fields").
+-- Clicks still answer at once. The window is sent only when something it
+-- shows has changed.
 
-local OPT_DEFAULT = {lum = true, lph_s = 90, bank = true, bank_m = 5, bal_m = 5}
+local OPT_DEFAULT = {lum = true, lph_s = 90, bank = true, bank_m = 5, bal_m = 5, dep_note = false}
 local SIZE = 15          -- 20 px: lands exactly on the game's basefont20, so it stays
                          -- sharp (13/14 are stretched and look soft; 12 and 18 are also exact)
 local START_DELAY = 8    -- seconds after login before "@lph start"
@@ -95,7 +105,7 @@ local function chat_rules(now)
   for g, rules in pairs(REPLY) do
     if now < hide[g] then
       local sec = math.ceil(hide[g] - now)
-      for _, r in ipairs(rules) do f[#f + 1] = {id = r.id, prefix = r.prefix, contains = r.contains, sender = "", seconds = sec} end
+      for _, r in ipairs(rules) do f[#f + 1] = {id = r.id, prefix = r.prefix, contains = r.contains, sender_type = "server", seconds = sec} end
     end
   end
   return f
@@ -182,7 +192,7 @@ end
 local lum = {total = nil, hour = nil, five = nil, at = nil}
 local bal = {}               -- bank counts by BANK_ITEMS key
 local ccr = {}               -- Conquest Coins rate: base_at (login or Reset), n (coins given since)
-local hist_serial = nil      -- chat up to this serial was before the plugin started
+local dep = nil              -- the plugin's own /b d: {till, items} (deposit summary)
 local now_s = 0              -- this callback's time (for the coins per hour shown)
 local cmd = {queue = {}, sent_at = -1e9, serial = 0, started = false, next_poll = nil, start_at = nil, inflight = {}, next_bank = nil, next_bal = nil, hide_bank = false}
 local show_settings = false
@@ -285,10 +295,23 @@ local function bank_line(text, now)
   elseif string.contains(name, "Legendary Keys") then bal.keys = n end
 end
 
+-- "Deposited 19,053 pyreals" after the plugin's own /b d (the closing
+-- "Deposited all Pyreals, ..." line ends the list).
+local DEP_RE = "^Deposited ([\\d,]+) (.+?)[.!]?\\s*$"
+local function deposit_line(text, now)
+  if not dep or now > dep.till or string.sub(text, 1, 10) ~= "Deposited " or #text > 300 then return end
+  if string.sub(text, 1, 14) == "Deposited all " then dep.done = true; return end
+  local m = regexmatch(text, DEP_RE)
+  if m and #dep.items < 12 then dep.items[#dep.items + 1] = m["1"] .. " " .. m["2"] end
+end
+
 -- Window ----------------------------------------------------------------------
 -- Tight rows: no padding around the rows or their cells (the client's default
 -- is 2 px on every side of each). The client still adds 2-3 px between controls.
-local function cell(id, text) return {id = id, type = "text", size = SIZE, text = text, padding = 0} end
+local LABEL_W = 96       -- px, the label column ("Next level:" at size 15)
+-- A number cell: right-aligned in its column (1.5.0, client v146 "align").
+local function cell(id, text) return {id = id, type = "text", size = SIZE, text = text, padding = 0, align = "right"} end
+local function label(id, text) return {id = id, type = "text", size = SIZE, text = text, padding = 0, width = LABEL_W, wrap = false} end
 -- Bank item: the item tile at ICON px (natural width), then the count at the
 -- window's text size, both straight in the row: a nested row would add the
 -- client's fixed 3 px around each of its children again. An item_icon's
@@ -303,7 +326,7 @@ local function add_item(kids, id, it)
     if r then count = count .. " (" .. commas(r) .. "/h)" end
   end
   if it.icon then
-    kids[#kids + 1] = {id = id .. "i", type = "item_icon", size = ICON, padding = 0, auto_width = true, tooltip = it.tip,
+    kids[#kids + 1] = {id = id .. "i", type = "item_icon", size = ICON, padding = 0, width = ICON, tooltip = it.tip,
       icon = it.icon, underlay = it.underlay, overlay = it.overlay, effects = it.effects, item_type = it.item_type}
     local c = cell(id .. "n", count); c.tooltip = it.tip
     kids[#kids + 1] = c
@@ -313,7 +336,7 @@ local function add_item(kids, id, it)
   end
 end
 local function row(id, a, b, c, it)
-  local kids = {cell(id .. "a", a), cell(id .. "b", b), cell(id .. "c", c)}
+  local kids = {label(id .. "a", a), cell(id .. "b", b), cell(id .. "c", c)}
   if it then add_item(kids, id .. "d", it) end
   return {id = id, type = "row", padding = 0, children = kids}
 end
@@ -330,7 +353,7 @@ end
 local function shown_key()
   return table.concat({xpv.five, xpv.hour, xpv.total, xpv.est, tostring(lum.five), tostring(lum.hour), tostring(bal.lum), tostring(bal.mmd),
     tostring(bal.cc), tostring(bal.dc), tostring(bal.keys), tostring(cc_rate(now_s)), tostring(show_settings),
-    tostring(opt("lum")), tostring(opt("lph_s")), tostring(opt("bank")), tostring(opt("bank_m")), tostring(opt("bal_m"))}, "|")
+    tostring(opt("lum")), tostring(opt("lph_s")), tostring(opt("bank")), tostring(opt("bank_m")), tostring(opt("bal_m")), tostring(opt("dep_note"))}, "|")
 end
 local last_key = nil
 
@@ -340,28 +363,32 @@ local function build()
     row("r5", "Last 5 min", xpv.five, lumtext(lum.five), BANK_ITEMS[2]),
     row("rh", "Per hour", xpv.hour, lumtext(lum.hour), BANK_ITEMS[3]),
     row("rt", "Total", xpv.total, bal.lum and commas(bal.lum) or "--", BANK_ITEMS[4]),
-    -- Next level: same columns as the rows above, the estimate under XP. An
-    -- empty natural-width cell stands in for the item tile (the estimate still
-    -- starts a few px right of the XP numbers: the tile is wider than nothing).
+    -- Next level: the same columns as the rows above (fixed label and item
+    -- widths), the estimate right-aligned under XP.
     {id = "est", type = "row", padding = 0, children = {
-      (function() local c = cell("esta", "Next level:"); c.wrap = false; c.tooltip = "Estimated time to your next level"; return c end)(),
+      (function() local c = label("esta", "Next level:"); c.tooltip = "Estimated time to your next level"; return c end)(),
       (function() local c = cell("estb", xpv.est); c.wrap = false; return c end)(), cell("estc", ""),
-      {id = "estd", type = "text", size = SIZE, text = "", padding = 0, auto_width = true}, cell("este", "")}},
-    {id = "btns", type = "row", children = {
+      {id = "estd", type = "text", size = SIZE, text = "", padding = 0, width = ICON}, cell("este", "")}},
+    -- Hidden while the window is pinned (the client shows them again when
+    -- unpinned or while Quick-show is held).
+    {id = "btns", type = "row", hide_when_pinned = true, children = {
       {id = "reset", type = "button", size = SIZE, text = "Reset", tooltip = "Clear the XP figures and restart luminance tracking (/lph restart)"},
       {id = "settings", type = "button", size = SIZE, text = "Settings"}}},
   }
   if show_settings then
-    ui[#ui + 1] = {id = "opt|lum", type = "checkbox", size = SIZE, text = "Luminance tracking", value = opt("lum"),
-      tooltip = "Off sends /lph stop; on sends /lph start"}
-    ui[#ui + 1] = {id = "opt|lph_s", type = "number", size = SIZE, text = "/lph update interval", min = 30, max = 300, step = 1,
-      value = tonumber(opt("lph_s")) or 90, enabled = opt("lum"), tooltip = "Seconds between automatic /lph reads (30-300)"}
-    ui[#ui + 1] = {id = "opt|bank", type = "checkbox", size = SIZE, text = "Automatic /b d", value = opt("bank"),
-      tooltip = "Deposits all valid items into your bank on the interval"}
-    ui[#ui + 1] = {id = "opt|bank_m", type = "number", size = SIZE, text = "/b d interval (minutes)", min = 2, max = 10, step = 1,
-      value = tonumber(opt("bank_m")) or 5, enabled = opt("bank"), tooltip = "Minutes between automatic /b d (2-10)"}
-    ui[#ui + 1] = {id = "opt|bal_m", type = "number", size = SIZE, text = "/b update interval (minutes)", min = 2, max = 10, step = 1,
-      value = tonumber(opt("bal_m")) or 5, tooltip = "Minutes between automatic /b reads of your bank balances (2-10)"}
+    ui[#ui + 1] = {id = "set", type = "column", hide_when_pinned = true, children = {
+      {id = "opt|lum", type = "checkbox", size = SIZE, text = "Luminance tracking", value = opt("lum"),
+        tooltip = "Off sends /lph stop; on sends /lph start"},
+      {id = "opt|lph_s", type = "number", size = SIZE, text = "/lph update interval", min = 30, max = 300, step = 1,
+        value = tonumber(opt("lph_s")) or 90, enabled = opt("lum"), tooltip = "Seconds between automatic /lph reads (30-300)"},
+      {id = "opt|bank", type = "checkbox", size = SIZE, text = "Automatic /b d", value = opt("bank"),
+        tooltip = "Deposits all valid items into your bank on the interval"},
+      {id = "opt|bank_m", type = "number", size = SIZE, text = "/b d interval (minutes)", min = 2, max = 10, step = 1,
+        value = tonumber(opt("bank_m")) or 5, enabled = opt("bank"), tooltip = "Minutes between automatic /b d (2-10)"},
+      {id = "opt|dep_note", type = "checkbox", size = SIZE, text = "Show deposits in chat", value = opt("dep_note"), enabled = opt("bank"),
+        tooltip = "After each automatic /b d, one line in chat lists what was deposited"},
+      {id = "opt|bal_m", type = "number", size = SIZE, text = "/b update interval (minutes)", min = 2, max = 10, step = 1,
+        value = tonumber(opt("bal_m")) or 5, tooltip = "Minutes between automatic /b reads of your bank balances (2-10)"}}}
   end
   return ui
 end
@@ -375,7 +402,6 @@ return function(s, p)
     reset_xp(now)
     cmd.start_at = now + START_DELAY
     ccr = {base_at = now, n = 0}
-    hist_serial = tonumber(s.chat_latest_serial)
   end
   now_s = now
   -- A different character: start over.
@@ -422,6 +448,8 @@ return function(s, p)
       elseif k == "bank" then
         st.opt.bank = e.value == true
         cmd.next_bank = now + bank_every()
+      elseif k == "dep_note" then
+        st.opt.dep_note = e.value == true
       elseif k == "lum" then
         st.opt.lum = e.value == true
         if st.opt.lum then send("@lph start"); cmd.started = true; cmd.next_poll = now + 5
@@ -431,11 +459,13 @@ return function(s, p)
     end
   end
 
-  -- Chat: /lph replies
+  -- Chat: only the subscribed server lines arrive (plugin.json), from the
+  -- newest line on; sender_type says the server sent them.
   for _, e in ipairs(s.chat_events or {}) do
-    if (e.sender or "") == "" and type(e.raw_text) == "string" then
-      lph_line(e.raw_text, now); bank_line(e.raw_text, now); bank_wait_line(e.raw_text, now)
-      if not (hist_serial and tonumber(e.serial) and tonumber(e.serial) <= hist_serial) then coin_line(e.raw_text) end
+    local server = e.sender_type == "server" or (e.sender_type == nil and (e.sender or "") == "")
+    if server and type(e.raw_text) == "string" then
+      local t = e.raw_text
+      lph_line(t, now); bank_line(t, now); bank_wait_line(t, now); coin_line(t); deposit_line(t, now)
     end
   end
 
@@ -451,6 +481,7 @@ return function(s, p)
   -- Bank commands at least BANK_GAP seconds apart (server cooldown).
   if opt("bank") and player and cmd.next_bank and now >= cmd.next_bank and now - cmd.bank_at >= BANK_GAP then
     send("@b d"); cmd.next_bank = now + bank_every(); cmd.bank_at, cmd.bank_cmd = now, "@b d"
+    dep = nil
   end
   -- Bank balances: /b 30 s after login, then on its interval.
   if player and cmd.next_bal and now >= cmd.next_bal and now - cmd.bank_at >= BANK_GAP then
@@ -477,6 +508,17 @@ return function(s, p)
     local g = reply_group(text)
     if g then hide[g] = now + HIDE_S; out.chat_filters = chat_rules(now) end
     if text == "@b" or text == "@b d" then cmd.bank_at = now end
+    -- The plugin's own deposit: collect its "Deposited ..." lines for the summary.
+    if text == "@b d" then dep = {till = now + HIDE_S, items = {}} end
+  end
+  -- Deposit summary: when the closing line arrives or the reply window ends.
+  if dep and (dep.done or now > dep.till) then
+    if opt("dep_note") and #dep.items > 0 then
+      out.requests = out.requests or {}
+      out.requests[#out.requests + 1] = {id = "dep_note", service = "notice", operation = "show",
+        text = string.sub("Deposited: " .. table.concat(dep.items, ", "), 1, 500)}
+    end
+    dep = nil
   end
 
   refresh_xpv(now, level, total)
