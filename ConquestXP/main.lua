@@ -1,4 +1,4 @@
--- Conquest XP 1.5.0: Hunt Ledger's XP figures plus Conquest's /lph luminance
+-- Conquest XP 1.5.1: Hunt Ledger's XP figures plus Conquest's /lph luminance
 -- (AC:Unreal API 2 companion). Needs client v146 or newer.
 --
 -- XP: the same calculation as the client's Hunt Ledger (ACELedger.h,
@@ -65,8 +65,9 @@
 --   [Conquest XP] Deposited: 19,053 pyreals, 87,500 pyreal peas, 1 Conquest Coins
 -- (nothing when nothing was deposited). Only you see it; nothing is sent.
 --
--- Window: the numbers are right-aligned in their columns and the label column
--- has a fixed width. While the window is pinned, Reset, Settings and the
+-- Window: the XP and Luminance numbers are right-aligned in their columns and
+-- the label column has a fixed width; each bank tile sits a fixed gap after the
+-- Luminance column with its value left-aligned beside it (1.5.1). While the window is pinned, Reset, Settings and the
 -- settings are hidden (the client shows them again when unpinned or while
 -- Quick-show is held).
 --
@@ -318,6 +319,8 @@ local function label(id, text) return {id = id, type = "text", size = SIZE, text
 -- "size" also sets its own (empty) label's font, so the tile is kept small
 -- to keep the row about one text line high.
 local ICON = 20          -- user's choice; the game's item pictures are 32 px (16 is the client minimum)
+local GAP = 16           -- px between the Luminance numbers and the item tiles (1.5.1)
+local COUNT_W = 120      -- px, the bank values, left-aligned beside their tiles ("1,917 (117/h)")
 local function add_item(kids, id, it)
   local n = bal[it.key]
   local count = n and commas(n) or "--"
@@ -325,13 +328,16 @@ local function add_item(kids, id, it)
     local r = cc_rate(now_s)
     if r then count = count .. " (" .. commas(r) .. "/h)" end
   end
+  -- 1.5.1: a fixed gap after the Luminance column, the tile, then the value
+  -- left-aligned in a fixed-width column right beside it.
+  kids[#kids + 1] = {id = id .. "g", type = "text", size = SIZE, text = "", padding = 0, width = GAP}
   if it.icon then
     kids[#kids + 1] = {id = id .. "i", type = "item_icon", size = ICON, padding = 0, width = ICON, tooltip = it.tip,
       icon = it.icon, underlay = it.underlay, overlay = it.overlay, effects = it.effects, item_type = it.item_type}
-    local c = cell(id .. "n", count); c.tooltip = it.tip
+    local c = cell(id .. "n", count); c.tooltip = it.tip; c.align = "left"; c.width = COUNT_W; c.wrap = false
     kids[#kids + 1] = c
   else
-    local c = cell(id .. "n", it.label .. "  " .. count); c.tooltip = it.tip
+    local c = cell(id .. "n", it.label .. "  " .. count); c.tooltip = it.tip; c.align = "left"; c.width = ICON + COUNT_W; c.wrap = false
     kids[#kids + 1] = c
   end
 end
@@ -368,7 +374,9 @@ local function build()
     {id = "est", type = "row", padding = 0, children = {
       (function() local c = label("esta", "Next level:"); c.tooltip = "Estimated time to your next level"; return c end)(),
       (function() local c = cell("estb", xpv.est); c.wrap = false; return c end)(), cell("estc", ""),
-      {id = "estd", type = "text", size = SIZE, text = "", padding = 0, width = ICON}, cell("este", "")}},
+      {id = "estg", type = "text", size = SIZE, text = "", padding = 0, width = GAP},
+      {id = "estd", type = "text", size = SIZE, text = "", padding = 0, width = ICON},
+      {id = "este", type = "text", size = SIZE, text = "", padding = 0, width = COUNT_W}}},
     -- Hidden while the window is pinned (the client shows them again when
     -- unpinned or while Quick-show is held).
     {id = "btns", type = "row", hide_when_pinned = true, children = {

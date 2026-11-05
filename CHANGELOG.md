@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.5.1 (2026-11-04)
+
+- Bank column: each item symbol sits a little further right of the luminance numbers, with its value left-aligned right beside it. The column takes less space, so the window can be narrower.
+
 ## 1.5.0 (2026-11-04)
 
 Needs AC:Unreal client v146 or newer.
