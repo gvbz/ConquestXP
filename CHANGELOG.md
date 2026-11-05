@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.5.3 (2026-11-04)
+
+- The space after the bank values now matches the window's left margin (the column width is worked out per character instead of a fixed width per character).
+
 ## 1.5.2 (2026-11-04)
 
 - The bank column is only as wide as its longest value, so it sits against the right edge of the window and the XP and Lum columns share the rest evenly.

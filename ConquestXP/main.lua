@@ -1,4 +1,4 @@
--- Conquest XP 1.5.2: Hunt Ledger's XP figures plus Conquest's /lph luminance
+-- Conquest XP 1.5.3: Hunt Ledger's XP figures plus Conquest's /lph luminance
 -- (AC:Unreal API 2 companion). Needs client v146 or newer.
 --
 -- XP: the same calculation as the client's Hunt Ledger (ACELedger.h,
@@ -322,10 +322,18 @@ local function label(id, text) return {id = id, type = "text", size = SIZE, text
 -- to keep the row about one text line high.
 local ICON = 20          -- user's choice; the game's item pictures are 32 px (16 is the client minimum)
 local GAP = 16           -- px between the Luminance numbers and the item tiles (1.5.1)
--- 1.5.2: the bank values' column is as wide as the longest value shown (about
--- 8 px per character at this text size, plus a small margin), so the tiles and
--- values sit against the window's right edge and XP and Lum share the rest.
-local CHAR_W, VALUE_PAD = 8, 6
+-- 1.5.2: the bank values' column is as wide as the longest value shown, so the
+-- tiles and values sit against the window's right edge and XP and Lum share
+-- the rest. 1.5.3: widths per character, measured at this text size (digits
+-- and letters 7.5 px, comma 3, space 4, brackets and "/" 5), plus 5 px, so the
+-- space after the values matches the window's left margin.
+local NARROW = {[","] = 3, ["."] = 3, [" "] = 4, ["("] = 5, [")"] = 5, ["/"] = 5, ["-"] = 5}
+local VALUE_PAD = 5
+local function text_w(t)
+  local w = 0
+  for i = 1, #t do w = w + (NARROW[string.sub(t, i, i)] or 7.5) end
+  return math.ceil(w) + VALUE_PAD
+end
 local count_w = 60
 local function count_text(it)
   local n = bal[it.key]
@@ -374,9 +382,8 @@ end
 local last_key = nil
 
 local function build()
-  local longest = 2
-  for _, it in ipairs(BANK_ITEMS) do longest = math.max(longest, #count_text(it)) end
-  count_w = longest * CHAR_W + VALUE_PAD
+  count_w = 20
+  for _, it in ipairs(BANK_ITEMS) do count_w = math.max(count_w, text_w(count_text(it))) end
   local ui = {
     row("h", "", "XP", "Lum", BANK_ITEMS[1]),
     row("r5", "Last 5 min", xpv.five, lumtext(lum.five), BANK_ITEMS[2]),
