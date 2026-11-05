@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.5.2 (2026-11-04)
+
+- The bank column is only as wide as its longest value, so it sits against the right edge of the window and the XP and Lum columns share the rest evenly.
+- The Luminance column's heading is now "Lum".
+
 ## 1.5.1 (2026-11-04)
 
 - Bank column: each item symbol sits a little further right of the luminance numbers, with its value left-aligned right beside it. The column takes less space, so the window can be narrower.

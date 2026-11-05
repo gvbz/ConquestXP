@@ -37,7 +37,7 @@ Replace the files in `Installed\ConquestXP` with the new download and press **Re
 
 ### The window
 
-| | XP | Luminance |
+| | XP | Lum (luminance) |
 |---|---|---|
 | **Last 5 min** | XP gained in the last 5 minutes | Conquest's 5-minute luminance rate, divided by 12 |
 | **Per hour** | XP since login or Reset, divided by the time elapsed | Conquest's luminance per hour |

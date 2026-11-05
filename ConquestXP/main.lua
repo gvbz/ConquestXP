@@ -1,4 +1,4 @@
--- Conquest XP 1.5.1: Hunt Ledger's XP figures plus Conquest's /lph luminance
+-- Conquest XP 1.5.2: Hunt Ledger's XP figures plus Conquest's /lph luminance
 -- (AC:Unreal API 2 companion). Needs client v146 or newer.
 --
 -- XP: the same calculation as the client's Hunt Ledger (ACELedger.h,
@@ -67,7 +67,9 @@
 --
 -- Window: the XP and Luminance numbers are right-aligned in their columns and
 -- the label column has a fixed width; each bank tile sits a fixed gap after the
--- Luminance column with its value left-aligned beside it (1.5.1). While the window is pinned, Reset, Settings and the
+-- Luminance column with its value left-aligned beside it (1.5.1), in a column
+-- just wide enough for the longest value, so the bank column sits against the
+-- right edge (1.5.2). The Luminance column's heading is "Lum". While the window is pinned, Reset, Settings and the
 -- settings are hidden (the client shows them again when unpinned or while
 -- Quick-show is held).
 --
@@ -320,24 +322,32 @@ local function label(id, text) return {id = id, type = "text", size = SIZE, text
 -- to keep the row about one text line high.
 local ICON = 20          -- user's choice; the game's item pictures are 32 px (16 is the client minimum)
 local GAP = 16           -- px between the Luminance numbers and the item tiles (1.5.1)
-local COUNT_W = 120      -- px, the bank values, left-aligned beside their tiles ("1,917 (117/h)")
-local function add_item(kids, id, it)
+-- 1.5.2: the bank values' column is as wide as the longest value shown (about
+-- 8 px per character at this text size, plus a small margin), so the tiles and
+-- values sit against the window's right edge and XP and Lum share the rest.
+local CHAR_W, VALUE_PAD = 8, 6
+local count_w = 60
+local function count_text(it)
   local n = bal[it.key]
   local count = n and commas(n) or "--"
   if it.key == "cc" and n then
     local r = cc_rate(now_s)
     if r then count = count .. " (" .. commas(r) .. "/h)" end
   end
+  return count
+end
+local function add_item(kids, id, it)
+  local count = count_text(it)
   -- 1.5.1: a fixed gap after the Luminance column, the tile, then the value
   -- left-aligned in a fixed-width column right beside it.
   kids[#kids + 1] = {id = id .. "g", type = "text", size = SIZE, text = "", padding = 0, width = GAP}
   if it.icon then
     kids[#kids + 1] = {id = id .. "i", type = "item_icon", size = ICON, padding = 0, width = ICON, tooltip = it.tip,
       icon = it.icon, underlay = it.underlay, overlay = it.overlay, effects = it.effects, item_type = it.item_type}
-    local c = cell(id .. "n", count); c.tooltip = it.tip; c.align = "left"; c.width = COUNT_W; c.wrap = false
+    local c = cell(id .. "n", count); c.tooltip = it.tip; c.align = "left"; c.width = count_w; c.wrap = false
     kids[#kids + 1] = c
   else
-    local c = cell(id .. "n", it.label .. "  " .. count); c.tooltip = it.tip; c.align = "left"; c.width = ICON + COUNT_W; c.wrap = false
+    local c = cell(id .. "n", it.label .. "  " .. count); c.tooltip = it.tip; c.align = "left"; c.width = ICON + count_w; c.wrap = false
     kids[#kids + 1] = c
   end
 end
@@ -364,8 +374,11 @@ end
 local last_key = nil
 
 local function build()
+  local longest = 2
+  for _, it in ipairs(BANK_ITEMS) do longest = math.max(longest, #count_text(it)) end
+  count_w = longest * CHAR_W + VALUE_PAD
   local ui = {
-    row("h", "", "XP", "Luminance", BANK_ITEMS[1]),
+    row("h", "", "XP", "Lum", BANK_ITEMS[1]),
     row("r5", "Last 5 min", xpv.five, lumtext(lum.five), BANK_ITEMS[2]),
     row("rh", "Per hour", xpv.hour, lumtext(lum.hour), BANK_ITEMS[3]),
     row("rt", "Total", xpv.total, bal.lum and commas(bal.lum) or "--", BANK_ITEMS[4]),
@@ -376,7 +389,7 @@ local function build()
       (function() local c = cell("estb", xpv.est); c.wrap = false; return c end)(), cell("estc", ""),
       {id = "estg", type = "text", size = SIZE, text = "", padding = 0, width = GAP},
       {id = "estd", type = "text", size = SIZE, text = "", padding = 0, width = ICON},
-      {id = "este", type = "text", size = SIZE, text = "", padding = 0, width = COUNT_W}}},
+      {id = "este", type = "text", size = SIZE, text = "", padding = 0, width = count_w}}},
     -- Hidden while the window is pinned (the client shows them again when
     -- unpinned or while Quick-show is held).
     {id = "btns", type = "row", hide_when_pinned = true, children = {
