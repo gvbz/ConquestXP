@@ -2,7 +2,7 @@
 
 An XP and luminance tracker plugin for the AC:Unreal client made specifically for the Conquest server. XP figures use the same calculation as the client's built-in Hunt Ledger, but includes the extended 275-300 xp table. Luminance comes from server `/lph` commands, and your bank balances from the server `/b` command.
 
-<img width="213" height="80" alt="conquestxp_2" src="https://github.com/user-attachments/assets/20599288-c4f3-48f6-8470-98cb71ca80c8" />
+<img width="433" height="173" alt="Screenshot 2026-11-04 215852" src="https://github.com/user-attachments/assets/fda34cf3-977c-4e21-9b99-f0a04aab4cab" />
 
 ## Features
 
