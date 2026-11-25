@@ -1,0 +1,27 @@
+name: Attach AC:Unreal plugin
+on:
+  release:
+    types: [published]
+permissions:
+  contents: write
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: plugin-source
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: Thwargle/ACUnrealPlugins
+          ref: v1.1
+          path: catalog-tools
+          persist-credentials: false
+      - name: Build release asset
+        run: python3 catalog-tools/tools/package.py plugin-source/ConquestXP --output dist
+      - name: Attach package to this release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: gh release upload "$TAG" dist/*.acplugin --repo "$GITHUB_REPOSITORY" --clobber
